@@ -83,7 +83,7 @@ class BotPlayer {
             host: '195.58.152.25',
             port: 25928,
             username: this.name,
-            version: '1.19.2'
+            version: '1.20.1'  // Исправлено на версию сервера
         });
         
         this.bot.loadPlugin(pathfinder);
