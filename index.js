@@ -51,6 +51,9 @@ function createBot(nickname, index, retryCount = 0) {
     let nickSaved = false;
     let loginAttempts = 0;
     const MAX_LOGIN_ATTEMPTS = 3;
+    
+    // Запоминаем ID ссылки, чтобы не спамить
+    let processedLinkId = null;
 
     const bot = mineflayer.createBot({
         host: SERVER.host,
@@ -80,6 +83,7 @@ function createBot(nickname, index, retryCount = 0) {
     bot.once('spawn', () => {
         console.log(`[${nickname}] 🎮 Появление на сервере`);
 
+        // Первая попытка регистрации/логина через 3 секунды
         setTimeout(() => {
             if (!authDone && loginAttempts < MAX_LOGIN_ATTEMPTS) {
                 bot.chat(`/login ${PASSWORD}`);
@@ -115,20 +119,52 @@ function createBot(nickname, index, retryCount = 0) {
         const lower = text.toLowerCase();
         const cleanText = text.replace(/§[0-9a-fk-or]/g, '');
 
-        // ВЫВОДИМ ПОЛНОЕ СООБЩЕНИЕ БЕЗ ОБРЕЗАНИЯ
-        if (cleanText.length > 0) {
-            console.log(`[${nickname}] 📨 ${cleanText}`);
-            
-            // Если есть ссылка - выводим отдельно
-            if (cleanText.includes('https://')) {
-                const urlMatch = cleanText.match(/https:\/\/[^\s]+/);
-                if (urlMatch) {
-                    console.log(`[${nickname}] 🔗 ССЫЛКА: ${urlMatch[0]}`);
+        // === ОБРАБОТКА ССЫЛОК (антиспам) ===
+        if (cleanText.includes('https://mineblaze.net/antibot/?id=')) {
+            const urlMatch = cleanText.match(/https:\/\/mineblaze\.net\/antibot\/\?id=[^\s]+/);
+            if (urlMatch) {
+                const linkId = urlMatch[0];
+                if (processedLinkId === linkId) {
+                    return;
                 }
+                processedLinkId = linkId;
+                console.log(`[${nickname}] 🔗 ССЫЛКА: ${linkId}`);
+                console.log(`[${nickname}] 📨 ${cleanText}`);
+                return;
             }
         }
 
+        // Выводим только уникальные сообщения
+        if (cleanText.length > 0 && !cleanText.includes('https://')) {
+            console.log(`[${nickname}] 📨 ${cleanText}`);
+        }
+
+        // === АВТОРИЗАЦИЯ (реагируем на сообщения из чата) ===
         if (!authDone) {
+            // Если сервер просит зарегистрироваться
+            if (lower.includes('зарегистрируйтесь') || 
+                lower.includes('зарегистрироваться') ||
+                lower.includes('регистрация') ||
+                lower.includes('register') ||
+                (lower.includes('/reg') && lower.includes('пароль'))) {
+                console.log(`[${nickname}] 📝 Сервер просит регистрацию, отправляем /reg`);
+                bot.chat(`/reg ${PASSWORD} ${PASSWORD}`);
+                loginAttempts++;
+                return;
+            }
+            
+            // Если сервер просит авторизоваться (логин)
+            if (lower.includes('авторизоваться') || 
+                lower.includes('войти') ||
+                lower.includes('login') ||
+                lower.includes('/login')) {
+                console.log(`[${nickname}] 🔑 Сервер просит логин, отправляем /login`);
+                bot.chat(`/login ${PASSWORD}`);
+                loginAttempts++;
+                return;
+            }
+            
+            // Успешная авторизация
             if (lower.includes('успешно') || 
                 lower.includes('successfully') || 
                 lower.includes('зарегистрирован') ||
@@ -141,15 +177,18 @@ function createBot(nickname, index, retryCount = 0) {
                     console.log(`[${nickname}] 🎯 /bedwars`);
                 }, 2000);
             }
-            else if (lower.includes('неверно') || 
-                     lower.includes('wrong') || 
-                     lower.includes('занят') ||
-                     lower.includes('already')) {
+            
+            // Ошибка (ник занят или пароль неверный)
+            if (lower.includes('неверно') || 
+                lower.includes('wrong') || 
+                lower.includes('занят') ||
+                lower.includes('already')) {
                 console.log(`[${nickname}] ❌ Ник занят или пароль неверный`);
                 setTimeout(() => bot.end(), 1000);
             }
         }
 
+        // === ПРИГЛАШЕНИЯ В ПАТИ ===
         if (authDone && (
             lower.includes('пригласил') || 
             lower.includes('приглашение') ||
@@ -177,7 +216,7 @@ function createBot(nickname, index, retryCount = 0) {
         console.log(`[${nickname}] 🔌 Отключён`);
     });
 
-    // Таймаут авторизации
+    // Таймаут авторизации (если ничего не помогло)
     setTimeout(() => {
         if (!authDone) {
             console.log(`[${nickname}] ⏰ Таймаут авторизации`);
