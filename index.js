@@ -115,8 +115,17 @@ function createBot(nickname, index, retryCount = 0) {
         const lower = text.toLowerCase();
         const cleanText = text.replace(/§[0-9a-fk-or]/g, '');
 
+        // ВЫВОДИМ ПОЛНОЕ СООБЩЕНИЕ БЕЗ ОБРЕЗАНИЯ
         if (cleanText.length > 0) {
-            console.log(`[${nickname}] 📨 ${cleanText.substring(0, 100)}`);
+            console.log(`[${nickname}] 📨 ${cleanText}`);
+            
+            // Если есть ссылка - выводим отдельно
+            if (cleanText.includes('https://')) {
+                const urlMatch = cleanText.match(/https:\/\/[^\s]+/);
+                if (urlMatch) {
+                    console.log(`[${nickname}] 🔗 ССЫЛКА: ${urlMatch[0]}`);
+                }
+            }
         }
 
         if (!authDone) {
