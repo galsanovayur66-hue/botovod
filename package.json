@@ -6,6 +6,12 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "mineflayer": "^4.20.0"
+    "mineflayer": "^4.20.0",
+    "mineflayer-pathfinder": "^2.4.5",
+    "mineflayer-pvp": "^1.0.0",
+    "mineflayer-crafting": "^1.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0 <21.0.0"
   }
 }
