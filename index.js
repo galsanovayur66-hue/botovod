@@ -188,7 +188,6 @@ console.log('🚀 Запуск ботов...\n');
 
 try { fs.writeFileSync(NICKS_FILE, ''); } catch (e) {}
 
-// ===== ГЕНЕРИРУЕМ И ПОКАЗЫВАЕМ ВСЕ НИКИ ПЕРЕД ЗАПУСКОМ =====
 console.log('📋 Список всех ников:');
 const allNicks = [];
 for (let i = 0; i < BOT_COUNT; i++) {
@@ -210,7 +209,6 @@ for (let i = 0; i < BOT_COUNT; i++) {
 
 console.log('✅ Скрипт запущен. Ожидайте подключения...\n');
 
-// ===== КОМАНДА ДЛЯ ПОВТОРНОГО ВЫВОДА НИКОВ =====
 console.log('💡 Введите "nicks" в консоли, чтобы показать список ников');
 console.log('💡 Введите "stats" для статистики\n');
 
@@ -243,4 +241,4 @@ process.on('SIGINT', () => {
         if (bot && bot.end) bot.end();
     });
     process.exit(0);
-});b
+});
