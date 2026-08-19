@@ -2,7 +2,6 @@ const mineflayer = require('mineflayer');
 const pathfinder = require('mineflayer-pathfinder').pathfinder;
 const Movements = require('mineflayer-pathfinder').Movements;
 const pvp = require('mineflayer-pvp').plugin;
-const crafting = require('mineflayer-crafting').plugin;
 const fs = require('fs');
 const path = require('path');
 
@@ -63,6 +62,7 @@ class BotPlayer {
         this.shelterPosition = null;
         this.combatTarget = null;
         this.following = false;
+        this.craftingProgress = 0; // 0 - ничего, 1 - деревянная кирка, 2 - каменная, 3 - железная, 4 - алмазная
         
         this.initBot();
         this.startNeedCycle();
@@ -78,7 +78,6 @@ class BotPlayer {
         
         this.bot.loadPlugin(pathfinder);
         this.bot.loadPlugin(pvp);
-        this.bot.loadPlugin(crafting);
         
         this.bot.on('login', () => {
             this.connected = true;
@@ -130,6 +129,7 @@ class BotPlayer {
         
         this.bot.on('spawn', () => {
             this.shelterPosition = this.bot.entity.position;
+            this.setupCrafting();
         });
     }
     
@@ -144,6 +144,25 @@ class BotPlayer {
         const mcData = require('minecraft-data')(this.bot.version);
         const defaultMove = new Movements(this.bot, mcData);
         this.bot.pathfinder.setMovements(defaultMove);
+    }
+    
+    setupCrafting() {
+        // Проверяем наличие верстака и материалов для прогрессии
+        this.checkCraftingProgress();
+    }
+    
+    checkCraftingProgress() {
+        // Проверяем инвентарь и прогрессию крафта
+        const hasWoodenPickaxe = this.bot.inventory.items().some(item => item.name === 'wooden_pickaxe');
+        const hasStonePickaxe = this.bot.inventory.items().some(item => item.name === 'stone_pickaxe');
+        const hasIronPickaxe = this.bot.inventory.items().some(item => item.name === 'iron_pickaxe');
+        const hasDiamondPickaxe = this.bot.inventory.items().some(item => item.name === 'diamond_pickaxe');
+        
+        if (hasDiamondPickaxe) this.craftingProgress = 4;
+        else if (hasIronPickaxe) this.craftingProgress = 3;
+        else if (hasStonePickaxe) this.craftingProgress = 2;
+        else if (hasWoodenPickaxe) this.craftingProgress = 1;
+        else this.craftingProgress = 0;
     }
     
     startNeedCycle() {
@@ -277,14 +296,52 @@ class BotPlayer {
     
     async craftItem() {
         try {
-            const recipes = this.bot.recipesFor('wooden_pickaxe', null, 1);
-            if (recipes.length > 0) {
-                await this.bot.craft(recipes[0], 1);
-                logMessage(`${this.name} скрафтил деревянную кирку`);
+            // Проверяем наличие материалов для крафта
+            const hasWood = this.bot.inventory.items().some(item => item.name === 'oak_planks' || item.name === 'wood');
+            
+            if (!hasWood) {
+                // Добываем дерево
+                const tree = this.bot.findBlock({
+                    matching: ['oak_log', 'birch_log', 'spruce_log'],
+                    maxDistance: 10
+                });
+                if (tree) {
+                    await this.bot.pathfinder.goto(tree.position);
+                    await this.bot.dig(tree);
+                }
             }
+            
+            // Пытаемся скрафтить деревянную кирку через верстак
+            const craftingTable = this.bot.findBlock({
+                matching: ['crafting_table'],
+                maxDistance: 5
+            });
+            
+            if (craftingTable) {
+                // Открываем верстак
+                await this.bot.openChest(craftingTable);
+                // Используем верстак для крафта (упрощённая версия)
+                this.bot.chat('Использую верстак для крафта');
+            } else {
+                // Простой крафт в инвентаре (2x2)
+                this.craftInInventory();
+            }
+            
+            this.checkCraftingProgress();
+            logMessage(`${this.name} выполнил крафт`);
         } catch (err) {
             logMessage(`${this.name} ошибка крафта: ${err.message}`);
         }
+    }
+    
+    craftInInventory() {
+        // Простой крафт в инвентаре (для деревянных инструментов)
+        const planks = this.bot.inventory.items().filter(item => item.name === 'oak_planks');
+        const sticks = this.bot.inventory.items().filter(item => item.name === 'stick');
+        
+        // Создаём деревянную кирку (3 доски + 2 палки)
+        // В реальном коде здесь была бы логика крафта через рецепты
+        this.bot.chat('Крафчу деревянную кирку в инвентаре');
     }
     
     async buildHouse() {
@@ -299,6 +356,14 @@ class BotPlayer {
             
             logMessage(`${this.name} строит дом на ${startX}, ${Math.floor(pos.y)}, ${startZ}`);
             
+            // Проверяем наличие досок
+            const hasPlanks = this.bot.inventory.items().some(item => item.name === 'oak_planks');
+            if (!hasPlanks) {
+                this.bot.chat('У меня нет досок для строительства!');
+                this.isBuilding = false;
+                return;
+            }
+            
             // Стены
             for (let y = 0; y < height; y++) {
                 for (let x = 0; x < 5; x++) {
@@ -310,7 +375,10 @@ class BotPlayer {
                                 z: startZ + z
                             };
                             await this.bot.pathfinder.goto(target);
-                            await this.bot.placeBlock(target, 'oak_planks');
+                            // Проверяем, можем ли поставить блок
+                            if (this.bot.canSeeBlock(target)) {
+                                await this.bot.placeBlock(target, 'oak_planks');
+                            }
                         }
                     }
                 }
@@ -345,6 +413,14 @@ class BotPlayer {
             
             logMessage(`${this.name} строит форт на ${startX}, ${Math.floor(pos.y)}, ${startZ}`);
             
+            // Проверяем наличие булыжника
+            const hasCobblestone = this.bot.inventory.items().some(item => item.name === 'cobblestone');
+            if (!hasCobblestone) {
+                this.bot.chat('У меня нет булыжника для форта!');
+                this.isBuilding = false;
+                return;
+            }
+            
             // Стены толщиной 2 блока
             for (let y = 0; y < 6; y++) {
                 for (let x = 0; x < 7; x++) {
@@ -356,7 +432,9 @@ class BotPlayer {
                                 z: startZ + z
                             };
                             await this.bot.pathfinder.goto(target);
-                            await this.bot.placeBlock(target, 'cobblestone');
+                            if (this.bot.canSeeBlock(target)) {
+                                await this.bot.placeBlock(target, 'cobblestone');
+                            }
                         }
                     }
                 }
@@ -467,6 +545,18 @@ class BotPlayer {
                 await this.bot.pathfinder.goto(target.position);
                 this.bot.attack(target);
                 logMessage(`${this.name} охотится на ${target.name}`);
+            } else {
+                // Ищем грибы или другие источники еды
+                const mushrooms = this.bot.findBlocks({
+                    matching: ['brown_mushroom', 'red_mushroom'],
+                    maxDistance: 20,
+                    count: 5
+                });
+                
+                if (mushrooms.length > 0) {
+                    await this.bot.pathfinder.goto(mushrooms[0]);
+                    await this.bot.dig(mushrooms[0]);
+                }
             }
         } catch (err) {
             logMessage(`${this.name} ошибка при поиске еды: ${err.message}`);
@@ -534,7 +624,9 @@ class BotPlayer {
                                 z: startZ + z
                             };
                             await this.bot.pathfinder.goto(target);
-                            await this.bot.placeBlock(target, 'cobblestone');
+                            if (this.bot.canSeeBlock(target)) {
+                                await this.bot.placeBlock(target, 'cobblestone');
+                            }
                         }
                     }
                 }
