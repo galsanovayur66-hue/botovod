@@ -37,9 +37,8 @@ const commandTranslator = {
 };
 
 class BotPlayer {
-    constructor(name, index) {
+    constructor(name) {
         this.name = name;
-        this.index = index;
         this.bot = null;
         this.connected = false;
         this.isRunning = true;
@@ -48,7 +47,7 @@ class BotPlayer {
         this.target = null;
         this.isBuilding = false;
         this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
+        this.maxReconnectAttempts = 10;
         this.reconnectTimeout = null;
         this.isReconnecting = false;
         
@@ -64,8 +63,6 @@ class BotPlayer {
         
         this.needs = ['HUNGER', 'SLEEP', 'RESOURCE', 'BUILD', 'EXPLORE', 'REST'];
         this.shelterPosition = null;
-        this.combatTarget = null;
-        this.following = false;
         this.craftingProgress = 0;
         
         this.initBot();
@@ -83,7 +80,7 @@ class BotPlayer {
             host: '195.58.152.25',
             port: 25928,
             username: this.name,
-            version: '1.20.1'  // Исправлено на версию сервера
+            version: '1.20.1'
         });
         
         this.bot.loadPlugin(pathfinder);
@@ -93,7 +90,7 @@ class BotPlayer {
             this.connected = true;
             this.reconnectAttempts = 0;
             this.isReconnecting = false;
-            logMessage(`${this.name} подключился к серверу`);
+            logMessage(`${this.name} подключился к серверу!`);
             this.setupPathfinder();
             this.bot.chat(`Привет! Я бот ${this.name}`);
             this.bot.chat(`Мой характер: агрессивность ${this.personality.aggressiveness}, трусость ${this.personality.cowardice}`);
@@ -117,10 +114,6 @@ class BotPlayer {
             if (username === 'LTTBoomza') {
                 this.handleCommand(message, username);
             }
-            
-            if (message.includes(this.name) && message.includes('помоги')) {
-                this.helpOtherBot(username);
-            }
         });
         
         this.bot.on('entityHurt', (entity) => {
@@ -142,7 +135,7 @@ class BotPlayer {
         
         this.bot.on('spawn', () => {
             this.shelterPosition = this.bot.entity.position;
-            this.setupCrafting();
+            this.bot.chat('Я готов к работе!');
         });
     }
     
@@ -186,27 +179,6 @@ class BotPlayer {
             this.bot.pathfinder.setMovements(defaultMove);
         } catch (err) {
             logMessage(`${this.name} ошибка настройки pathfinder: ${err.message}`);
-        }
-    }
-    
-    setupCrafting() {
-        this.checkCraftingProgress();
-    }
-    
-    checkCraftingProgress() {
-        try {
-            const hasWoodenPickaxe = this.bot.inventory.items().some(item => item.name === 'wooden_pickaxe');
-            const hasStonePickaxe = this.bot.inventory.items().some(item => item.name === 'stone_pickaxe');
-            const hasIronPickaxe = this.bot.inventory.items().some(item => item.name === 'iron_pickaxe');
-            const hasDiamondPickaxe = this.bot.inventory.items().some(item => item.name === 'diamond_pickaxe');
-            
-            if (hasDiamondPickaxe) this.craftingProgress = 4;
-            else if (hasIronPickaxe) this.craftingProgress = 3;
-            else if (hasStonePickaxe) this.craftingProgress = 2;
-            else if (hasWoodenPickaxe) this.craftingProgress = 1;
-            else this.craftingProgress = 0;
-        } catch (err) {
-            // Игнорируем ошибки при проверке инвентаря
         }
     }
     
@@ -260,18 +232,6 @@ class BotPlayer {
     
     handleCommand(message, username) {
         const lowerMsg = message.toLowerCase();
-        let command = lowerMsg;
-        
-        if (lowerMsg.includes('бот ')) {
-            const parts = lowerMsg.split(' ');
-            const botName = parts[1];
-            if (botName === this.name.toLowerCase()) {
-                command = parts.slice(2).join(' ');
-                this.executeCommand(command, username);
-            }
-            return;
-        }
-        
         this.executeCommand(lowerMsg, username);
     }
     
@@ -344,6 +304,9 @@ class BotPlayer {
                 await this.bot.pathfinder.goto(target);
                 await this.bot.dig(target);
                 logMessage(`${this.name} добыл ресурс на ${target.x}, ${target.y}, ${target.z}`);
+                this.bot.chat(`Добыл ресурс!`);
+            } else {
+                this.bot.chat('Рядом нет ресурсов');
             }
         } catch (err) {
             logMessage(`${this.name} ошибка при добыче: ${err.message}`);
@@ -363,10 +326,11 @@ class BotPlayer {
                 if (tree) {
                     await this.bot.pathfinder.goto(tree.position);
                     await this.bot.dig(tree);
+                    this.bot.chat('Добыл дерево для крафта');
                 }
             }
             
-            this.checkCraftingProgress();
+            this.bot.chat('Крафт выполнен!');
             logMessage(`${this.name} выполнил крафт`);
         } catch (err) {
             logMessage(`${this.name} ошибка крафта: ${err.message}`);
@@ -384,6 +348,7 @@ class BotPlayer {
             const height = 3;
             
             logMessage(`${this.name} строит дом на ${startX}, ${Math.floor(pos.y)}, ${startZ}`);
+            this.bot.chat('Начинаю строить дом!');
             
             const hasPlanks = this.bot.inventory.items().some(item => item.name === 'oak_planks');
             if (!hasPlanks) {
@@ -422,6 +387,7 @@ class BotPlayer {
             logMessage(`${this.name} построил дом`);
         } catch (err) {
             logMessage(`${this.name} ошибка при строительстве дома: ${err.message}`);
+            this.bot.chat('Ошибка при строительстве дома');
         }
         
         this.isBuilding = false;
@@ -437,6 +403,7 @@ class BotPlayer {
             const startZ = Math.floor(pos.z) + 2;
             
             logMessage(`${this.name} строит форт на ${startX}, ${Math.floor(pos.y)}, ${startZ}`);
+            this.bot.chat('Начинаю строить форт!');
             
             const hasCobblestone = this.bot.inventory.items().some(item => item.name === 'cobblestone');
             if (!hasCobblestone) {
@@ -467,6 +434,7 @@ class BotPlayer {
             logMessage(`${this.name} построил форт`);
         } catch (err) {
             logMessage(`${this.name} ошибка при строительстве форта: ${err.message}`);
+            this.bot.chat('Ошибка при строительстве форта');
         }
         
         this.isBuilding = false;
@@ -478,6 +446,8 @@ class BotPlayer {
             const pos = this.bot.entity.position;
             const startX = Math.floor(pos.x);
             const startZ = Math.floor(pos.z);
+            
+            this.bot.chat('Копаю шахту!');
             
             for (let y = 0; y < 10; y++) {
                 const target = {
@@ -530,6 +500,7 @@ class BotPlayer {
             this.target = entity;
             this.attackTarget();
             logMessage(`${this.name} атакует обидчика ${entity.username}`);
+            this.bot.chat(`Атакую ${entity.username}!`);
         }
     }
     
@@ -538,9 +509,7 @@ class BotPlayer {
             logMessage(`${this.name} спешит на помощь LTTBoomza!`);
             this.target = entity;
             this.attackTarget();
-            if (this.bot) {
-                this.bot.chat('LTTBoomza в опасности! Все на помощь!');
-            }
+            this.bot.chat('LTTBoomza в опасности! Я спешу на помощь!');
         }
     }
     
@@ -550,6 +519,7 @@ class BotPlayer {
             if (this.bot.health < 5 && this.shelterPosition) {
                 this.bot.pathfinder.goto(this.shelterPosition);
                 logMessage(`${this.name} прячется в убежище (HP: ${this.bot.health})`);
+                this.bot.chat('Я ранен, прячусь!');
             }
             
             if (this.bot.food < 3) {
@@ -585,6 +555,7 @@ class BotPlayer {
                 await this.bot.pathfinder.goto(target.position);
                 this.bot.attack(target);
                 logMessage(`${this.name} охотится на ${target.name}`);
+                this.bot.chat(`Охочусь на ${target.name}!`);
             } else {
                 const mushrooms = this.bot.findBlocks({
                     matching: ['brown_mushroom', 'red_mushroom'],
@@ -595,6 +566,7 @@ class BotPlayer {
                 if (mushrooms.length > 0) {
                     await this.bot.pathfinder.goto(mushrooms[0]);
                     await this.bot.dig(mushrooms[0]);
+                    this.bot.chat('Собрал грибы!');
                 }
             }
         } catch (err) {
@@ -614,6 +586,7 @@ class BotPlayer {
                 await this.bot.pathfinder.goto(bed.position);
                 await this.bot.sleep(bed);
                 logMessage(`${this.name} лёг спать`);
+                this.bot.chat('Спокойной ночи!');
             }
         } catch (err) {
             logMessage(`${this.name} ошибка при сне: ${err.message}`);
@@ -638,6 +611,7 @@ class BotPlayer {
             }, 'torch');
             
             logMessage(`${this.name} построил убежище`);
+            this.bot.chat('Построил убежище!');
         } catch (err) {
             logMessage(`${this.name} ошибка при строительстве убежища: ${err.message}`);
         }
@@ -656,6 +630,8 @@ class BotPlayer {
             const pos = this.bot.entity.position;
             const startX = Math.floor(pos.x);
             const startZ = Math.floor(pos.z);
+            
+            this.bot.chat('Строю башню!');
             
             for (let y = 0; y < 5; y++) {
                 for (let x = 0; x < 3; x++) {
@@ -694,10 +670,12 @@ class BotPlayer {
         });
         
         logMessage(`${this.name} исследует область`);
+        this.bot.chat('Исследую окрестности!');
     }
     
     rest() {
         logMessage(`${this.name} отдыхает`);
+        this.bot.chat('Отдыхаю...');
     }
     
     stopAll() {
@@ -707,6 +685,7 @@ class BotPlayer {
             this.bot.pvp.stop();
             this.isBuilding = false;
             logMessage(`${this.name} остановил все действия`);
+            this.bot.chat('Остановил все действия!');
         } catch (err) {
             // Игнорируем ошибки
         }
@@ -718,6 +697,7 @@ class BotPlayer {
         if (player && player.entity) {
             this.bot.pathfinder.goto(player.entity.position);
             logMessage(`${this.name} идёт к ${username}`);
+            this.bot.chat(`Иду к ${username}!`);
         }
     }
     
@@ -729,6 +709,9 @@ class BotPlayer {
                 const item = items[0];
                 this.bot.toss(item.type, null, 1);
                 logMessage(`${this.name} дал ${username} ${item.name}`);
+                this.bot.chat(`Дал ${username} ${item.name}`);
+            } else {
+                this.bot.chat('У меня нет предметов!');
             }
         } catch (err) {
             logMessage(`${this.name} ошибка при передаче ресурса: ${err.message}`);
@@ -744,15 +727,6 @@ class BotPlayer {
             this.bot.chat(status);
         } catch (err) {
             logMessage(`${this.name} ошибка статуса: ${err.message}`);
-        }
-    }
-    
-    helpOtherBot(username) {
-        if (!this.connected || !this.bot) return;
-        const player = this.bot.players[username];
-        if (player && player.entity) {
-            this.bot.pathfinder.goto(player.entity.position);
-            logMessage(`${this.name} помогает ${username}`);
         }
     }
     
@@ -776,19 +750,13 @@ class BotPlayer {
     }
 }
 
-// Создание и запуск ботов
-const bots = [];
-const botNames = ['Bot_1', 'Bot_2', 'Bot_3', 'Bot_4', 'Bot_5'];
-
-for (let i = 0; i < 5; i++) {
-    const bot = new BotPlayer(botNames[i], i);
-    bots.push(bot);
-}
+// Создание и запуск ОДНОГО бота
+const bot = new BotPlayer('Bot_1');
 
 // Обработка завершения программы
 process.on('SIGINT', () => {
     logMessage('Завершение программы...');
-    bots.forEach(bot => bot.stop());
+    bot.stop();
     process.exit(0);
 });
 
@@ -797,9 +765,9 @@ process.on('uncaughtException', (err) => {
     logMessage(`Необработанная ошибка: ${err.message}`);
 });
 
-logMessage('Все боты запущены!');
+logMessage('Бот запущен!');
 logMessage('Ожидание подключения к серверу 195.58.152.25:25928');
 
-console.log('Боты запущены. Для остановки нажмите Ctrl+C');
-console.log('Имена ботов: Bot_1, Bot_2, Bot_3, Bot_4, Bot_5');
+console.log('Бот запущен! Имя: Bot_1');
 console.log('Команды принимаются от LTTBoomza в чате');
+console.log('Для остановки нажмите Ctrl+C');
